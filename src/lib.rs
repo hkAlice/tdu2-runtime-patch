@@ -319,6 +319,15 @@ unsafe fn apply_anti_tamper_patches(base: usize) {
     );
     patch_bytes(base + 0x4BB9BF, &[0x01]);
 
+    // 00D63F35: FF 15 E8 11 E4 00   ; CALL [IsDebuggerPresent IAT]
+    // force IsDebuggerPresent return 0 for debuggers who don't patch it out
+    // XOR EAX,EAX + NOPs
+    patch_bytes(base + 0x963F35, &[0x31, 0xC0, 0x90, 0x90, 0x90, 0x90]);
+
+    // 00D63F11: 0B C1          ; OR EAX, ECX
+    // clear latched debug flag result before SETNZ
+    patch_bytes(base + 0x963F11, &[0x31, 0xC0]); // XOR EAX,EAX
+
     flush_region(base + 0x4B0000, 0x10000, "first flag quit region");
     flush_region(base + 0x490000, 0x10000, "second flag quit region");
     flush_region(base + 0x950000, 0x10000, "killswitch region");
