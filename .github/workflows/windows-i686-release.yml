@@ -1,0 +1,64 @@
+name: windows-i686-release
+
+on:
+  pull_request:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: i686-pc-windows-msvc
+
+      - name: Build release DLL
+        run: cargo build --release --target i686-pc-windows-msvc
+
+      - name: Prepare distribution files
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item target/i686-pc-windows-msvc/release/version.dll dist/version.dll
+          if (Test-Path tdu2-runtime-patch.ini) {
+            Copy-Item tdu2-runtime-patch.ini dist/tdu2-runtime-patch.ini
+          }
+          Copy-Item README.md dist/README.md
+          Copy-Item LICENSE dist/LICENSE
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tdu2-runtime-patch-windows-i686
+          path: dist/*
+
+  release:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tdu2-runtime-patch-windows-i686
+          path: dist
+
+      - name: Create release zip
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist/* -DestinationPath tdu2-runtime-patch-${{ github.ref_name }}-windows-i686.zip
+
+      - name: Publish GitHub release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: tdu2-runtime-patch-${{ github.ref_name }}-windows-i686.zip
