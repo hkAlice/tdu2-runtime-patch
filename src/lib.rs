@@ -12,22 +12,31 @@ use log::LevelFilter;
 use windows_sys::Win32::Foundation::{CloseHandle, BOOL, HINSTANCE, TRUE};
 use windows_sys::Win32::System::Diagnostics::Debug::FlushInstructionCache;
 use windows_sys::Win32::System::LibraryLoader::{DisableThreadLibraryCalls, GetModuleHandleA};
-use windows_sys::Win32::System::Memory::{VirtualProtect, PAGE_EXECUTE_READWRITE};
+use windows_sys::Win32::System::Memory::{
+    VirtualAlloc, VirtualProtect, MEM_COMMIT, MEM_RESERVE, PAGE_EXECUTE_READWRITE,
+};
 use windows_sys::Win32::System::SystemServices::{DLL_PROCESS_ATTACH, DLL_PROCESS_DETACH};
 use windows_sys::Win32::System::Threading::GetCurrentProcess;
 
 const CONFIG_FILE_NAME: &str = "tdu2-runtime-patch.ini";
 const LOG_FILE_NAME: &str = "tdu2-runtime-patch.log";
 const DEFAULT_STARTUP_DELAY_SECONDS: u64 = 3;
+const DEFAULT_FOV_ENABLED: bool = true;
+const DEFAULT_FOV_MULTIPLIER: f32 = 1.2;
+const FOV_HOOK_OFFSET: usize = 0x89260F;
+const FOV_RETURN_OFFSET: usize = 0x892615;
 const PROJECT_NAME: &str = env!("CARGO_PKG_NAME");
 const PROJECT_VERSION: &str = env!("CARGO_PKG_VERSION");
 static LOGGER_INIT: Once = Once::new();
+static mut FOV_MULTIPLIER_VALUE: f32 = DEFAULT_FOV_MULTIPLIER;
 
 #[derive(Clone, Copy)]
 struct PatchConfig {
     anti_tamper_enabled: bool,
     camera_fix_enabled: bool,
     startup_delay_seconds: u64,
+    fov_enabled: bool,
+    fov_multiplier: f32,
 }
 
 impl Default for PatchConfig {
@@ -36,6 +45,8 @@ impl Default for PatchConfig {
             anti_tamper_enabled: true,
             camera_fix_enabled: true,
             startup_delay_seconds: DEFAULT_STARTUP_DELAY_SECONDS,
+            fov_enabled: DEFAULT_FOV_ENABLED,
+            fov_multiplier: DEFAULT_FOV_MULTIPLIER,
         }
     }
 }
@@ -121,14 +132,20 @@ fn parse_bool(raw: &str) -> Option<bool> {
     }
 }
 
+fn parse_f32(raw: &str) -> Option<f32> {
+    raw.trim().parse::<f32>().ok()
+}
+
 fn write_default_config_file() {
     let defaults = PatchConfig::default();
     let anti_tamper = if defaults.anti_tamper_enabled { 1 } else { 0 };
     let camera_fix = if defaults.camera_fix_enabled { 1 } else { 0 };
+    let fov_enabled = if defaults.fov_enabled { 1 } else { 0 };
 
     let template = format!(
-        "[Patch]\nAntiTamperEnabled = {anti_tamper}\nCameraFixEnabled = {camera_fix}\nStartupDelaySeconds = {}\n",
-        defaults.startup_delay_seconds
+        "[Patch]\nAntiTamperEnabled = {anti_tamper}\nCameraFixEnabled = {camera_fix}\nStartupDelaySeconds = {}\n\n[FOV]\nEnabled = {fov_enabled}\nMultiplier = {:.1}\n",
+        defaults.startup_delay_seconds,
+        defaults.fov_multiplier
     );
 
     match fs::write(CONFIG_FILE_NAME, template) {
@@ -220,13 +237,44 @@ fn load_patch_config() -> PatchConfig {
                     ));
                 }
             }
+            "fov.multiplier" | "fov.mult" | "fovmultiplier" | "patch.fovmultiplier" => {
+                if let Some(parsed) = parse_f32(value) {
+                    if parsed.is_finite() && parsed > 0.0 {
+                        config.fov_multiplier = parsed;
+                    } else {
+                        log_warn("config", &format!(
+                            "Invalid float range for FOV multiplier on line {}: {value} (must be finite and > 0)",
+                            line_idx + 1
+                        ));
+                    }
+                } else {
+                    log_warn("config", &format!(
+                        "Invalid float for FOV multiplier on line {}: {value}",
+                        line_idx + 1
+                    ));
+                }
+            }
+            "fov.enabled" | "fovenabled" | "patch.fovenabled" => {
+                if let Some(parsed) = parse_bool(value) {
+                    config.fov_enabled = parsed;
+                } else {
+                    log_warn("config", &format!(
+                        "Invalid bool for FOV enabled on line {}: {value}",
+                        line_idx + 1
+                    ));
+                }
+            }
             _ => {}
         }
     }
 
     log_info("config", &format!(
-        "Config loaded: AntiTamperEnabled={}, CameraFixEnabled={}, StartupDelaySeconds={}",
-        config.anti_tamper_enabled, config.camera_fix_enabled, config.startup_delay_seconds
+        "Config loaded: AntiTamperEnabled={}, CameraFixEnabled={}, StartupDelaySeconds={}, FOVEnabled={}, FOVMultiplier={:.3}",
+        config.anti_tamper_enabled,
+        config.camera_fix_enabled,
+        config.startup_delay_seconds,
+        config.fov_enabled,
+        config.fov_multiplier
     ));
 
     config
@@ -265,6 +313,15 @@ unsafe fn patch_nop(addr: usize, len: usize) {
         std::ptr::write_bytes(addr as *mut u8, 0x90, len);
         restore_page_protection(addr, len, old_protect);
         log_info("patch", &format!("NOPed {len} bytes at {addr:#x}"));
+    }
+}
+
+fn relative_jump_displacement(src: usize, dst: usize, instruction_len: usize) -> Option<i32> {
+    let delta = dst as isize - (src as isize + instruction_len as isize);
+    if delta < i32::MIN as isize || delta > i32::MAX as isize {
+        None
+    } else {
+        Some(delta as i32)
     }
 }
 
@@ -331,6 +388,7 @@ unsafe fn apply_anti_tamper_patches(base: usize) {
     flush_region(base + 0x4B0000, 0x10000, "first flag quit region");
     flush_region(base + 0x490000, 0x10000, "second flag quit region");
     flush_region(base + 0x950000, 0x10000, "killswitch region");
+    flush_region(base + 0x960000, 0x10000, "debug check region");
 }
 
 unsafe fn apply_camera_fix_patches(base: usize) {
@@ -391,6 +449,91 @@ unsafe fn apply_camera_fix_patches(base: usize) {
     flush_region(base + 0x850000, 0x10000, "shake LUT region");
     flush_region(base + 0x8A0000, 0x10000, "amplitude region");
     flush_region(base + 0x8C0000, 0x10000, "camera position region");
+
+    // interesting notes:
+
+    // FUN_00ca25a0 -> XMM0 near clip, ESP far clip/"draw distance" (not LOD)
+}
+
+unsafe fn apply_fov_multiplier_hook(base: usize, multiplier: f32) -> bool {
+    let hook_addr = base + FOV_HOOK_OFFSET;
+    let return_addr = base + FOV_RETURN_OFFSET;
+    let expected_original = [0xD9, 0x5C, 0x24, 0x10, 0xFF, 0xD2];
+    let current = std::slice::from_raw_parts(hook_addr as *const u8, expected_original.len());
+
+    if current != expected_original {
+        log_error(
+            "fov",
+            &format!(
+                "Unexpected bytes at hook site {hook_addr:#x}: got {:02x?}, expected {:02x?}",
+                current, expected_original
+            ),
+        );
+        return false;
+    }
+
+    FOV_MULTIPLIER_VALUE = multiplier;
+
+    let cave = VirtualAlloc(
+        null_mut(),
+        0x1000,
+        MEM_COMMIT | MEM_RESERVE,
+        PAGE_EXECUTE_READWRITE,
+    ) as usize;
+
+    if cave == 0 {
+        log_error("fov", "VirtualAlloc failed for FOV code cave");
+        return false;
+    }
+
+    let multiplier_addr = core::ptr::addr_of!(FOV_MULTIPLIER_VALUE) as usize;
+    let cave_jmp_addr = cave + 12;
+
+    let Some(return_rel) = relative_jump_displacement(cave_jmp_addr, return_addr, 5) else {
+        log_error(
+            "fov",
+            &format!(
+                "Return jump out of range: cave_jmp={cave_jmp_addr:#x}, return={return_addr:#x}"
+            ),
+        );
+        return false;
+    };
+
+    let mut cave_code = [
+        0xD8, 0x0D, 0, 0, 0, 0, // fmul dword ptr [mult]
+        0xD9, 0x5C, 0x24, 0x10, // fstp dword ptr [esp+10]
+        0xFF, 0xD2, // call edx
+        0xE9, 0, 0, 0, 0, // jmp return
+    ];
+    cave_code[2..6].copy_from_slice(&(multiplier_addr as u32).to_le_bytes());
+    cave_code[13..17].copy_from_slice(&return_rel.to_le_bytes());
+
+    std::ptr::copy_nonoverlapping(cave_code.as_ptr(), cave as *mut u8, cave_code.len());
+    flush_region(cave, cave_code.len(), "fov cave");
+
+    let Some(hook_rel) = relative_jump_displacement(hook_addr, cave, 5) else {
+        log_error(
+            "fov",
+            &format!("Hook jump out of range: hook={hook_addr:#x}, cave={cave:#x}"),
+        );
+        return false;
+    };
+
+    let mut hook_patch = [0xE9, 0, 0, 0, 0, 0x90];
+    hook_patch[1..5].copy_from_slice(&hook_rel.to_le_bytes());
+
+    patch_bytes(hook_addr, &hook_patch);
+    flush_region(hook_addr, hook_patch.len(), "fov hook");
+
+    log_info(
+        "fov",
+        &format!(
+            "FOV hook applied: hook={hook_addr:#x}, cave={cave:#x}, return={return_addr:#x}, multiplier={:.3}",
+            multiplier
+        ),
+    );
+
+    true
 }
 
 unsafe extern "system" fn init_thread(_: *mut c_void) -> u32 {
@@ -409,6 +552,16 @@ unsafe extern "system" fn init_thread(_: *mut c_void) -> u32 {
     log_line(&format!("base = {base:#x}"));
 
     let mut enabled_groups = 0;
+
+    if config.fov_enabled {
+        if apply_fov_multiplier_hook(base, config.fov_multiplier) {
+            enabled_groups += 1;
+        } else {
+            log_warn("fov", "FOV multiplier hook was not applied");
+        }
+    } else {
+        log_info("fov", "FOV.Enabled=0, skipping FOV multiplier hook");
+    }
 
     if config.anti_tamper_enabled {
         apply_anti_tamper_patches(base);

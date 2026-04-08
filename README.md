@@ -20,6 +20,9 @@ No files are modified on disk.
 - **CameraFix**
   Patches camera bugs, fixes exterior camera jitter and applies frame-time–correct movement.
 
+- **Change FOV**
+  Runtime hook that multiplies the game's Field of View by a configurable value.
+
 ### Compatibility
 
 Validated on `Steam version, Update v034 DLC2 Build16 - EU` (sha1:`45bfdfe6cb600a32f9c9516bf34e62bea5af2a6`)
@@ -52,7 +55,15 @@ Example:
 AntiTamperEnabled = 1
 CameraFixEnabled = 1
 StartupDelaySeconds = 5
+
+[FOV]
+Enabled = 1
+Multiplier = 1.2
 ```
+
+## License
+
+This project is licensed under MIT. See [LICENSE](LICENSE).
 
 ## Build
 
