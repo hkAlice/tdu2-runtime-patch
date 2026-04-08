@@ -8,7 +8,7 @@ The project does **not** patch anti-piracy or DRM systems. Intended use is prese
 
 ## How it works
 
-The project uses a proxy `version.dll` to load into the game process, waits for the game to load, then applies patches at memory offsets.
+The project uses a proxy `version.dll` that forwards version API calls to Windows system providers (`kernelbase`/`kernel32`), then applies runtime patches after the game is loaded.
 
 No files are modified on disk.
 
@@ -33,10 +33,9 @@ Validated on `Steam version, Update v034 DLC2 Build16 - EU` (sha1:`45bfdfe6cb600
 
 [Download the DLL here](https://github.com/hkAlice/tdu2-runtime-patch/releases), or compile it locally.
 
-1. Copy `C:\Windows\SysWOW64\version.dll` to your TDU2 folder (next to `TestDrive2.exe`) and rename it to `version_orig.dll`.
-2. Copy this project's `version.dll` and `tdu2-runtime-patch.ini` into the same folder.
-3. (Optional) Edit `tdu2-runtime-patch.ini` in that folder.
-4. Launch the game.
+1. Copy this project's `version.dll` and `tdu2-runtime-patch.ini` next to `TestDrive2.exe` (game folder).
+2. (Optional) Edit `tdu2-runtime-patch.ini` in that folder.
+3. Launch the game.
 
 Logs are written to `tdu2-runtime-patch.log`.
 
@@ -44,7 +43,6 @@ Logs are written to `tdu2-runtime-patch.log`.
 
 If the config file does not exist, a default config 
 `tdu2-runtime-patch.ini` is generated on first launch.
-
 
 Supported values for booleans: `1/0`, `true/false`, `yes/no`, `on/off`
 

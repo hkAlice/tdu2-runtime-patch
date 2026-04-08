@@ -1,2 +1,1 @@
-[build]
-rustflags = ["-C", "link-arg=/DEF:version.def"]
+# `version.def` is no longer required, may remove later
