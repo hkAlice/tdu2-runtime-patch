@@ -63,4 +63,71 @@ pub(crate) unsafe fn apply_camera_fix_patches(base: usize) {
     // interesting notes:
 
     // FUN_00ca25a0 -> XMM0 near clip, ESP far clip/"draw distance" (not LOD)
+
+    // Camera mode dependent speed @ 0x00c90714:
+    /*
+      iVar2 = *(int *)(unaff_EDI + 0x2e8);
+        if (iVar2 == 0x16) {
+            fVar14 = 4.0;
+        }
+        else if (iVar2 == 0x17) {
+            fVar14 = 2.0;
+        }
+        else if (iVar2 == 0x18) {
+            fVar14 = 6.0;
+        }
+        else {
+            fVar14 = 1.5;
+        }
+     */
 }
+
+pub(crate) unsafe fn apply_camera_shake_patch(base: usize) {
+    log_info("camera", "Patching exterior camera shake (1459F44/1459F48)");
+
+    /*
+    disables camera turning?? wtf
+    // TEST ECX,0x1000 -> TEST ECX,0
+    patch_bytes(base + 0x8907CC, &[0x00]);
+    // TEST ECX,0x2000 -> TEST ECX,0
+    patch_bytes(base + 0x89083F, &[0x00]);
+    // TEST CL,0x20 -> TEST CL,0  (kills +0x385/386/387/64D accumulation)
+    patch_bytes(base + 0x88846F, &[0x00]);
+    // TEST CL,0x40 -> TEST CL,0  (kills +0x5EE/5EF path)
+    patch_bytes(base + 0x888539, &[0x00]);
+
+    flush_region(base + 0x880000, 0x10000, "exterior camera jitter region");
+    flush_region(base + 0x890000, 0x10000, "exterior camera jitter region");
+    */
+    /*
+    patch_nop(base + 0x86BBEF, 5);
+    patch_nop(base + 0x86BBF4, 5);
+    patch_nop(base + 0x86DA46, 5);
+    patch_nop(base + 0x86DAD9, 5);
+    patch_nop(base + 0x86DAF9, 5);
+
+    // 00C90968: imm8 of TEST [EDI+300], imm8
+    patch_bytes(base + 0x890968, &[0x00]);   // was 0x20*/
+
+
+    // Exterior shake accumulators
+    
+    //patch_bytes(base + 0x88F790, &[0xD9, 0xEE, 0x90, 0x90, 0x90, 0x90]); // FLD [1459F48] -> FLDZ
+    patch_bytes(base + 0x88F7BD, &[0xD9, 0xEE, 0x90, 0x90, 0x90, 0x90]); // FLD [1459F48] -> FLDZ
+
+
+    flush_region(base + 0x880000, 0x10000, "exterior camera jitter region");
+}
+
+/*
+pub(crate) unsafe fn apply_camera_offroad_jitter_patch(base: usize) {
+    log_info("camera", "Patching offroad camera shake (1459F4C)");
+
+    // Offroad-specific shake source
+    patch_bytes(base + 0x88F7BD, &[0xD9, 0xEE, 0x90, 0x90, 0x90, 0x90]);
+    patch_bytes(base + 0x88F708, &[0xD9, 0xEE, 0x90, 0x90, 0x90, 0x90]); // FLD [1459F44] -> FLDZ
+    patch_bytes(base + 0x88F735, &[0xD9, 0xEE, 0x90, 0x90, 0x90, 0x90]); // FLD [1459F44] -> FLDZ
+
+    flush_region(base + 0x880000, 0x10000, "offroad camera jitter region");
+}
+*/

@@ -18,7 +18,7 @@ No files are modified on disk.
   Disables anti-debug triggers and prevents forced shutdowns during runtime modification.
 
 - **CameraFix**
-  Patches camera bugs, fixes exterior camera jitter and applies frame-time–correct movement.
+  Patches camera bugs, applies frame-time–correct movement, and exterior + off-road camera shake/jitter/vibration.
 
 - **Change FOV**
   Runtime hook that multiplies the game's Field of View by a configurable value.
@@ -52,6 +52,7 @@ Example:
 [Patch]
 AntiTamperEnabled = 1
 CameraFixEnabled = 1
+CameraShakeFixEnabled = 1
 StartupDelaySeconds = 5
 
 [FOV]

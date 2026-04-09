@@ -10,7 +10,9 @@ const DEFAULT_FOV_MULTIPLIER: f32 = 1.2;
 #[derive(Clone, Copy)]
 pub(crate) struct PatchConfig {
     pub(crate) anti_tamper_enabled: bool,
+    pub(crate) skip_intro_enabled: bool,
     pub(crate) camera_fix_enabled: bool,
+    pub(crate) camera_shake_fix_enabled: bool,
     pub(crate) startup_delay_seconds: u64,
     pub(crate) fov_enabled: bool,
     pub(crate) fov_multiplier: f32,
@@ -20,7 +22,9 @@ impl Default for PatchConfig {
     fn default() -> Self {
         Self {
             anti_tamper_enabled: true,
+            skip_intro_enabled: true,
             camera_fix_enabled: true,
+            camera_shake_fix_enabled: true,
             startup_delay_seconds: DEFAULT_STARTUP_DELAY_SECONDS,
             fov_enabled: DEFAULT_FOV_ENABLED,
             fov_multiplier: DEFAULT_FOV_MULTIPLIER,
@@ -43,11 +47,17 @@ fn parse_f32(raw: &str) -> Option<f32> {
 fn write_default_config_file() {
     let defaults = PatchConfig::default();
     let anti_tamper = if defaults.anti_tamper_enabled { 1 } else { 0 };
+    let skip_intro = if defaults.skip_intro_enabled { 1 } else { 0 };
     let camera_fix = if defaults.camera_fix_enabled { 1 } else { 0 };
+    let camera_shake = if defaults.camera_shake_fix_enabled {
+        1
+    } else {
+        0
+    };
     let fov_enabled = if defaults.fov_enabled { 1 } else { 0 };
 
     let template = format!(
-        "[Patch]\nAntiTamperEnabled = {anti_tamper}\nCameraFixEnabled = {camera_fix}\nStartupDelaySeconds = {}\n\n[FOV]\nEnabled = {fov_enabled}\nMultiplier = {:.1}\n",
+        "[Patch]\nAntiTamperEnabled = {anti_tamper}\nSkipIntroEnabled = {skip_intro}\nCameraFixEnabled = {camera_fix}\nCameraShakeFixEnabled = {camera_shake}\nStartupDelaySeconds = {}\n\n[FOV]\nEnabled = {fov_enabled}\nMultiplier = {:.1}\n",
         defaults.startup_delay_seconds,
         defaults.fov_multiplier
     );
@@ -127,6 +137,19 @@ pub(crate) fn load_patch_config() -> PatchConfig {
                     );
                 }
             }
+            "patch.skipintroenabled" | "skipintroenabled" | "patch.skipintro" | "skipintro" => {
+                if let Some(parsed) = parse_bool(value) {
+                    config.skip_intro_enabled = parsed;
+                } else {
+                    log_warn(
+                        "config",
+                        &format!(
+                            "Invalid bool for SkipIntroEnabled on line {}: {value}",
+                            line_idx + 1
+                        ),
+                    );
+                }
+            }
             "patch.camerafixenabled" | "camerafixenabled" => {
                 if let Some(parsed) = parse_bool(value) {
                     config.camera_fix_enabled = parsed;
@@ -135,6 +158,24 @@ pub(crate) fn load_patch_config() -> PatchConfig {
                         "config",
                         &format!(
                             "Invalid bool for CameraFixEnabled on line {}: {value}",
+                            line_idx + 1
+                        ),
+                    );
+                }
+            }
+            "patch.camerashakefixenabled"
+            | "camerashakefixenabled"
+            | "patch.exteriorcamerashakefixenabled"
+            | "exteriorcamerashakefixenabled"
+            | "patch.offroadcamerashakefixenabled"
+            | "offroadcamerashakefixenabled" => {
+                if let Some(parsed) = parse_bool(value) {
+                    config.camera_shake_fix_enabled = parsed;
+                } else {
+                    log_warn(
+                        "config",
+                        &format!(
+                            "Invalid bool for CameraShakeFixEnabled on line {}: {value}",
                             line_idx + 1
                         ),
                     );
@@ -190,9 +231,11 @@ pub(crate) fn load_patch_config() -> PatchConfig {
     log_info(
         "config",
         &format!(
-            "Config loaded: AntiTamperEnabled={}, CameraFixEnabled={}, StartupDelaySeconds={}, FOVEnabled={}, FOVMultiplier={:.3}",
+            "Config loaded: AntiTamperEnabled={}, SkipIntroEnabled={}, CameraFixEnabled={}, CameraShakeFixEnabled={}, StartupDelaySeconds={}, FOVEnabled={}, FOVMultiplier={:.3}",
             config.anti_tamper_enabled,
+            config.skip_intro_enabled,
             config.camera_fix_enabled,
+            config.camera_shake_fix_enabled,
             config.startup_delay_seconds,
             config.fov_enabled,
             config.fov_multiplier

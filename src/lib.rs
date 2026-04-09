@@ -13,6 +13,7 @@ use std::time::Duration;
 use config::load_patch_config;
 use features::anti_tamper::apply_anti_tamper_patches;
 use features::camera::apply_camera_fix_patches;
+use features::camera::apply_camera_shake_patch;
 use features::fov::apply_fov_multiplier_hook;
 use runtime_log::{log_error, log_info, log_line, log_runtime_banner, log_warn};
 use windows_sys::Win32::Foundation::{CloseHandle, BOOL, HINSTANCE, TRUE};
@@ -74,6 +75,15 @@ unsafe extern "system" fn init_thread(_: *mut c_void) -> u32 {
         enabled_groups += 1;
     } else {
         log_info("camera", "CameraFixEnabled=0, skipping camera-fix patch group");
+    }
+
+    if config.camera_shake_fix_enabled {
+        apply_camera_shake_patch(base);
+    } else {
+        log_info(
+            "camera",
+            "CameraShakeFixEnabled=0, skipping exterior camera shake fix patch",
+        );
     }
 
     if enabled_groups == 0 {
