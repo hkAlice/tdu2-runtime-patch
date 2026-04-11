@@ -112,9 +112,9 @@ pub(crate) unsafe fn apply_camera_shake_patch(base: usize) {
 
     // Exterior shake accumulators
     
-    //patch_bytes(base + 0x88F790, &[0xD9, 0xEE, 0x90, 0x90, 0x90, 0x90]); // FLD [1459F48] -> FLDZ
+    patch_bytes(base + 0x88F790, &[0xD9, 0xEE, 0x90, 0x90, 0x90, 0x90]); // FLD [1459F48] -> FLDZ
     patch_bytes(base + 0x88F7BD, &[0xD9, 0xEE, 0x90, 0x90, 0x90, 0x90]); // FLD [1459F48] -> FLDZ
-
+    patch_bytes(base + 0x88F735, &[0xD9, 0xEE, 0x90, 0x90, 0x90, 0x90]); // FLD [1459F44] -> FLDZ
 
     flush_region(base + 0x880000, 0x10000, "exterior camera jitter region");
 }
