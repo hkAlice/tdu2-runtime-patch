@@ -45,7 +45,7 @@ pub(crate) unsafe fn apply_camera_fix_patches(base: usize) {
     // Original: DC 0D 68 AB F4 00  (FMUL double ptr [0x00F4AB68])
     // Patched:  D8 4D 0C 90 90 90  (FMUL dword ptr [EBP+0xC], NOP, NOP, NOP)
     log_info("camera", "Patching camera frame-time compensation");
-    patch_bytes(base + 0x8C1AA0, &[0xD8, 0x4D, 0x0C, 0x90, 0x90, 0x90]);
+    patch_bytes(base + 0x881AA0, &[0xD8, 0x4D, 0x0C, 0x90, 0x90, 0x90]);
 
     // Patch bug: if (param_3 < fVar21 - fVar21)
     // 00BBD440: FLD ST0 (D9 C0) -> FLDZ (D9 EE)
