@@ -20,6 +20,9 @@ No files are modified on disk.
 - **CameraFix**
   Patches camera bugs, applies frame-time–correct movement, and exterior + off-road camera shake/jitter/vibration.
 
+- **DLC Car Dealer Fix**
+  Allows offline purchase of DLC cars in dealerships.
+
 - **Change FOV**
   Runtime hook that multiplies the game's Field of View by a configurable value.
 
@@ -51,6 +54,7 @@ Example:
 ```ini
 [Patch]
 AntiTamperEnabled = 1
+DlcCarDealerFixEnabled = 1
 CameraFixEnabled = 1
 CameraShakeFixEnabled = 1
 StartupDelaySeconds = 5

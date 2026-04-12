@@ -4,9 +4,15 @@ use crate::runtime_log::log_info;
 pub(crate) unsafe fn apply_anti_tamper_patches(base: usize) {
     log_info("anti_tamper", "Applying anti-tamper patch group");
 
+    // notes:
+    // FUN_0074b630 is securom VN init
+    // fakes "nvapi" dispatch
+    // dumping DAT_00fa36b0 can collapse the entire vm wrapper call chain
+    // also DAT_00fa36ac is zero'd too when security module fails
+
     // NOP the trigger -> MOV [ECX+0x128], 0x25
     // 00D63F56: C7 81 28 01 00 00 25 00 00 00  (10 bytes)
-    patch_nop(base + 0x9C3F56, 10);
+    //patch_nop(base + 0x9C3F56, 10);
     flush_region(base + 0x9C0000, 0x10000, "anti tamper region");
 
     // Zero the IsDebuggerPresent func ptr so it never gets called

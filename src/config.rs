@@ -10,6 +10,7 @@ const DEFAULT_FOV_MULTIPLIER: f32 = 1.2;
 #[derive(Clone, Copy)]
 pub(crate) struct PatchConfig {
     pub(crate) anti_tamper_enabled: bool,
+    pub(crate) dlc_car_dealer_fix_enabled: bool,
     pub(crate) skip_intro_enabled: bool,
     pub(crate) camera_fix_enabled: bool,
     pub(crate) camera_shake_fix_enabled: bool,
@@ -22,6 +23,7 @@ impl Default for PatchConfig {
     fn default() -> Self {
         Self {
             anti_tamper_enabled: true,
+            dlc_car_dealer_fix_enabled: true,
             skip_intro_enabled: true,
             camera_fix_enabled: true,
             camera_shake_fix_enabled: true,
@@ -47,6 +49,11 @@ fn parse_f32(raw: &str) -> Option<f32> {
 fn write_default_config_file() {
     let defaults = PatchConfig::default();
     let anti_tamper = if defaults.anti_tamper_enabled { 1 } else { 0 };
+    let dlc_car_dealer_fix = if defaults.dlc_car_dealer_fix_enabled {
+        1
+    } else {
+        0
+    };
     let skip_intro = if defaults.skip_intro_enabled { 1 } else { 0 };
     let camera_fix = if defaults.camera_fix_enabled { 1 } else { 0 };
     let camera_shake = if defaults.camera_shake_fix_enabled {
@@ -57,7 +64,7 @@ fn write_default_config_file() {
     let fov_enabled = if defaults.fov_enabled { 1 } else { 0 };
 
     let template = format!(
-        "[Patch]\nAntiTamperEnabled = {anti_tamper}\nSkipIntroEnabled = {skip_intro}\nCameraFixEnabled = {camera_fix}\nCameraShakeFixEnabled = {camera_shake}\nStartupDelaySeconds = {}\n\n[FOV]\nEnabled = {fov_enabled}\nMultiplier = {:.1}\n",
+        "[Patch]\nAntiTamperEnabled = {anti_tamper}\nDlcCarDealerFixEnabled = {dlc_car_dealer_fix}\nSkipIntroEnabled = {skip_intro}\nCameraFixEnabled = {camera_fix}\nCameraShakeFixEnabled = {camera_shake}\nStartupDelaySeconds = {}\n\n[FOV]\nEnabled = {fov_enabled}\nMultiplier = {:.1}\n",
         defaults.startup_delay_seconds,
         defaults.fov_multiplier
     );
@@ -132,6 +139,24 @@ pub(crate) fn load_patch_config() -> PatchConfig {
                         "config",
                         &format!(
                             "Invalid bool for AntiTamperEnabled on line {}: {value}",
+                            line_idx + 1
+                        ),
+                    );
+                }
+            }
+            "patch.dlccardealerfixenabled"
+            | "dlccardealerfixenabled"
+            | "patch.dlcfixenabled"
+            | "dlcfixenabled"
+            | "patch.dlcofflinepurchasesenabled"
+            | "dlcofflinepurchasesenabled" => {
+                if let Some(parsed) = parse_bool(value) {
+                    config.dlc_car_dealer_fix_enabled = parsed;
+                } else {
+                    log_warn(
+                        "config",
+                        &format!(
+                            "Invalid bool for DlcCarDealerFixEnabled on line {}: {value}",
                             line_idx + 1
                         ),
                     );
@@ -231,8 +256,9 @@ pub(crate) fn load_patch_config() -> PatchConfig {
     log_info(
         "config",
         &format!(
-            "Config loaded: AntiTamperEnabled={}, SkipIntroEnabled={}, CameraFixEnabled={}, CameraShakeFixEnabled={}, StartupDelaySeconds={}, FOVEnabled={}, FOVMultiplier={:.3}",
+            "Config loaded: AntiTamperEnabled={}, DlcCarDealerFixEnabled={}, SkipIntroEnabled={}, CameraFixEnabled={}, CameraShakeFixEnabled={}, StartupDelaySeconds={}, FOVEnabled={}, FOVMultiplier={:.3}",
             config.anti_tamper_enabled,
+            config.dlc_car_dealer_fix_enabled,
             config.skip_intro_enabled,
             config.camera_fix_enabled,
             config.camera_shake_fix_enabled,
