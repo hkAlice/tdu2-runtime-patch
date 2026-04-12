@@ -2,8 +2,10 @@
 
 mod config;
 mod features;
+mod overlay;
 mod patch_utils;
 mod proxy;
+mod runtime_patches;
 mod runtime_log;
 
 use core::ffi::c_void;
@@ -11,11 +13,8 @@ use std::ptr::{null, null_mut};
 use std::time::Duration;
 
 use config::load_patch_config;
-use features::anti_tamper::apply_anti_tamper_patches;
-use features::camera::apply_camera_fix_patches;
-use features::camera::apply_camera_shake_patch;
-use features::dlc::apply_dlc_car_dealer_patches;
-use features::fov::apply_fov_multiplier_hook;
+use overlay::install_d3d9_overlay_hooks;
+use runtime_patches::initialize_runtime_patches;
 use runtime_log::{log_error, log_info, log_line, log_runtime_banner, log_warn};
 use windows_sys::Win32::Foundation::{CloseHandle, BOOL, HINSTANCE, TRUE};
 use windows_sys::Win32::System::LibraryLoader::{DisableThreadLibraryCalls, GetModuleHandleA};
@@ -49,51 +48,18 @@ unsafe extern "system" fn init_thread(_: *mut c_void) -> u32 {
     let base = module as usize;
     log_line(&format!("base = {base:#x}"));
 
-    let mut enabled_groups = 0;
+    let enabled_groups = initialize_runtime_patches(base, config);
 
-    if config.fov_enabled {
-        if apply_fov_multiplier_hook(base, config.fov_multiplier) {
-            enabled_groups += 1;
+    if config.d3d9_overlay_enabled {
+        if install_d3d9_overlay_hooks() {
+            log_info("overlay", "D3D9 overlay hooks installed");
         } else {
-            log_warn("fov", "FOV multiplier hook was not applied");
+            log_warn("overlay", "Failed to install D3D9 overlay hooks");
         }
     } else {
-        log_info("fov", "FOV.Enabled=0, skipping FOV multiplier hook");
-    }
-
-    if config.anti_tamper_enabled {
-        apply_anti_tamper_patches(base);
-        enabled_groups += 1;
-    } else {
         log_info(
-            "anti_tamper",
-            "AntiTamperEnabled=0, skipping anti-tamper patch group",
-        );
-    }
-
-    if config.dlc_car_dealer_fix_enabled {
-        apply_dlc_car_dealer_patches(base);
-        enabled_groups += 1;
-    } else {
-        log_info(
-            "dlc",
-            "DlcCarDealerFixEnabled=0, skipping DLC car dealer patch group",
-        );
-    }
-
-    if config.camera_fix_enabled {
-        apply_camera_fix_patches(base);
-        enabled_groups += 1;
-    } else {
-        log_info("camera", "CameraFixEnabled=0, skipping camera-fix patch group");
-    }
-
-    if config.camera_shake_fix_enabled {
-        apply_camera_shake_patch(base);
-    } else {
-        log_info(
-            "camera",
-            "CameraShakeFixEnabled=0, skipping exterior camera shake fix patch",
+            "overlay",
+            "D3D9OverlayEnabled=0, skipping D3D9 overlay hook bootstrap",
         );
     }
 

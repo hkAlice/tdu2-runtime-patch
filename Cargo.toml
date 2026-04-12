@@ -1,6 +1,6 @@
 [package]
 name = "tdu2-runtime-patch"
-version = "0.6.0"
+version = "0.7.0"
 edition = "2021"
 build = "build.rs"
  
@@ -11,7 +11,10 @@ crate-type = ["cdylib"]
 [dependencies]
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 fern = "0.7"
+imgui = "0.10.0"
+imgui-dx9-renderer = "0.10.0"
 log = "0.4"
+windows = { version = "0.44.0", features = ["Win32_Devices_HumanInterfaceDevice", "Win32_Foundation", "Win32_Graphics_Direct3D9"] }
 windows-sys = { version = "0.59", features = [
   "Win32_Foundation",
   "Win32_System_Diagnostics_Debug",
@@ -19,4 +22,8 @@ windows-sys = { version = "0.59", features = [
   "Win32_System_Memory",
   "Win32_System_Threading",
   "Win32_System_SystemServices",
+  "Win32_UI_WindowsAndMessaging",
 ] }
+
+[patch.crates-io]
+imgui-dx9-renderer = { path = "third_party/imgui-dx9-renderer" }

@@ -12,6 +12,10 @@ const FOV_HOOK_OFFSET: usize = 0x89260F;
 const FOV_RETURN_OFFSET: usize = 0x892615;
 static mut FOV_MULTIPLIER_VALUE: f32 = DEFAULT_FOV_MULTIPLIER;
 
+pub(crate) unsafe fn set_fov_multiplier_value(multiplier: f32) {
+    FOV_MULTIPLIER_VALUE = multiplier;
+}
+
 pub(crate) unsafe fn apply_fov_multiplier_hook(base: usize, multiplier: f32) -> bool {
     let hook_addr = base + FOV_HOOK_OFFSET;
     let return_addr = base + FOV_RETURN_OFFSET;

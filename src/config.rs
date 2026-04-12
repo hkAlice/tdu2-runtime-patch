@@ -6,6 +6,7 @@ const CONFIG_FILE_NAME: &str = "tdu2-runtime-patch.ini";
 const DEFAULT_STARTUP_DELAY_SECONDS: u64 = 3;
 const DEFAULT_FOV_ENABLED: bool = true;
 const DEFAULT_FOV_MULTIPLIER: f32 = 1.2;
+const DEFAULT_D3D9_OVERLAY_ENABLED: bool = false;
 
 #[derive(Clone, Copy)]
 pub(crate) struct PatchConfig {
@@ -14,6 +15,7 @@ pub(crate) struct PatchConfig {
     pub(crate) skip_intro_enabled: bool,
     pub(crate) camera_fix_enabled: bool,
     pub(crate) camera_shake_fix_enabled: bool,
+    pub(crate) d3d9_overlay_enabled: bool,
     pub(crate) startup_delay_seconds: u64,
     pub(crate) fov_enabled: bool,
     pub(crate) fov_multiplier: f32,
@@ -27,6 +29,7 @@ impl Default for PatchConfig {
             skip_intro_enabled: true,
             camera_fix_enabled: true,
             camera_shake_fix_enabled: true,
+            d3d9_overlay_enabled: DEFAULT_D3D9_OVERLAY_ENABLED,
             startup_delay_seconds: DEFAULT_STARTUP_DELAY_SECONDS,
             fov_enabled: DEFAULT_FOV_ENABLED,
             fov_multiplier: DEFAULT_FOV_MULTIPLIER,
@@ -46,28 +49,27 @@ fn parse_f32(raw: &str) -> Option<f32> {
     raw.trim().parse::<f32>().ok()
 }
 
+fn serialize_patch_config(mut config: PatchConfig) -> String {
+    config.anti_tamper_enabled = true;
+
+    let anti_tamper = if config.anti_tamper_enabled { 1 } else { 0 };
+    let dlc_car_dealer_fix = if config.dlc_car_dealer_fix_enabled { 1 } else { 0 };
+    let skip_intro = if config.skip_intro_enabled { 1 } else { 0 };
+    let camera_fix = if config.camera_fix_enabled { 1 } else { 0 };
+    let camera_shake = if config.camera_shake_fix_enabled { 1 } else { 0 };
+    let d3d9_overlay = if config.d3d9_overlay_enabled { 1 } else { 0 };
+    let fov_enabled = if config.fov_enabled { 1 } else { 0 };
+
+    format!(
+        "[Patch]\nAntiTamperEnabled = {anti_tamper}\nDlcCarDealerFixEnabled = {dlc_car_dealer_fix}\nSkipIntroEnabled = {skip_intro}\nCameraFixEnabled = {camera_fix}\nCameraShakeFixEnabled = {camera_shake}\nStartupDelaySeconds = {}\n\n[FOV]\nEnabled = {fov_enabled}\nMultiplier = {:.3}\n\n[Overlay]\nD3D9OverlayEnabled = {d3d9_overlay}\n",
+        config.startup_delay_seconds,
+        config.fov_multiplier
+    )
+}
+
 fn write_default_config_file() {
     let defaults = PatchConfig::default();
-    let anti_tamper = if defaults.anti_tamper_enabled { 1 } else { 0 };
-    let dlc_car_dealer_fix = if defaults.dlc_car_dealer_fix_enabled {
-        1
-    } else {
-        0
-    };
-    let skip_intro = if defaults.skip_intro_enabled { 1 } else { 0 };
-    let camera_fix = if defaults.camera_fix_enabled { 1 } else { 0 };
-    let camera_shake = if defaults.camera_shake_fix_enabled {
-        1
-    } else {
-        0
-    };
-    let fov_enabled = if defaults.fov_enabled { 1 } else { 0 };
-
-    let template = format!(
-        "[Patch]\nAntiTamperEnabled = {anti_tamper}\nDlcCarDealerFixEnabled = {dlc_car_dealer_fix}\nSkipIntroEnabled = {skip_intro}\nCameraFixEnabled = {camera_fix}\nCameraShakeFixEnabled = {camera_shake}\nStartupDelaySeconds = {}\n\n[FOV]\nEnabled = {fov_enabled}\nMultiplier = {:.1}\n",
-        defaults.startup_delay_seconds,
-        defaults.fov_multiplier
-    );
+    let template = serialize_patch_config(defaults);
 
     match fs::write(CONFIG_FILE_NAME, template) {
         Ok(_) => log_info(
@@ -78,6 +80,24 @@ fn write_default_config_file() {
             "config",
             &format!("Failed to create default config file {CONFIG_FILE_NAME}: {err}"),
         ),
+    }
+}
+
+pub(crate) fn save_patch_config(config: PatchConfig) -> bool {
+    let template = serialize_patch_config(config);
+
+    match fs::write(CONFIG_FILE_NAME, template) {
+        Ok(_) => {
+            log_info("config", &format!("Saved config file: {CONFIG_FILE_NAME}"));
+            true
+        }
+        Err(err) => {
+            log_error(
+                "config",
+                &format!("Failed to save config file {CONFIG_FILE_NAME}: {err}"),
+            );
+            false
+        }
     }
 }
 
@@ -133,7 +153,13 @@ pub(crate) fn load_patch_config() -> PatchConfig {
         match full_key.as_str() {
             "patch.antitamperenabled" | "antitamperenabled" => {
                 if let Some(parsed) = parse_bool(value) {
-                    config.anti_tamper_enabled = parsed;
+                    if !parsed {
+                        log_warn(
+                            "config",
+                            "AntiTamperEnabled=0 is not supported; forcing AntiTamperEnabled=1",
+                        );
+                    }
+                    config.anti_tamper_enabled = true;
                 } else {
                     log_warn(
                         "config",
@@ -249,6 +275,24 @@ pub(crate) fn load_patch_config() -> PatchConfig {
                     );
                 }
             }
+            "overlay.d3d9overlayenabled"
+            | "d3d9overlayenabled"
+            | "patch.d3d9overlayenabled"
+            | "overlay.d3d9heartbeatenabled"
+            | "d3d9heartbeatenabled"
+            | "patch.d3d9heartbeatenabled" => {
+                if let Some(parsed) = parse_bool(value) {
+                    config.d3d9_overlay_enabled = parsed;
+                } else {
+                    log_warn(
+                        "config",
+                        &format!(
+                            "Invalid bool for D3D9OverlayEnabled on line {}: {value}",
+                            line_idx + 1
+                        ),
+                    );
+                }
+            }
             _ => {}
         }
     }
@@ -256,12 +300,13 @@ pub(crate) fn load_patch_config() -> PatchConfig {
     log_info(
         "config",
         &format!(
-            "Config loaded: AntiTamperEnabled={}, DlcCarDealerFixEnabled={}, SkipIntroEnabled={}, CameraFixEnabled={}, CameraShakeFixEnabled={}, StartupDelaySeconds={}, FOVEnabled={}, FOVMultiplier={:.3}",
+            "Config loaded: AntiTamperEnabled={}, DlcCarDealerFixEnabled={}, SkipIntroEnabled={}, CameraFixEnabled={}, CameraShakeFixEnabled={}, D3D9OverlayEnabled={}, StartupDelaySeconds={}, FOVEnabled={}, FOVMultiplier={:.3}",
             config.anti_tamper_enabled,
             config.dlc_car_dealer_fix_enabled,
             config.skip_intro_enabled,
             config.camera_fix_enabled,
             config.camera_shake_fix_enabled,
+            config.d3d9_overlay_enabled,
             config.startup_delay_seconds,
             config.fov_enabled,
             config.fov_multiplier
